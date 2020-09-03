@@ -58,6 +58,7 @@ def clientReceivement():
            (client, address) = serversock.accept()
         except OSError:
             break
+
         th.append(Thread(target=listener, args = (client,address)) )
         th[-1].start()
     
@@ -82,8 +83,11 @@ while True:
 cap.release()
 cv2.destroyAllWindows()
 
-serversock.shutdown(socket.SHUT_RDWR)
-serversock.close()
+try:
+    serversock.shutdown(socket.SHUT_RDWR)
+    serversock.close()
+except OSError:
+    serversock.close()
 
 for thd in th:
     thd.join()
