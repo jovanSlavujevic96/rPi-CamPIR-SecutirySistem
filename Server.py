@@ -8,10 +8,16 @@ from threading import Thread
 import threading
 import time
 
+#sys lib for checking a platform (OS)
+from sys import platform
+
 #face detection classifier
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 #WebCam handler
-cap = cv2.VideoCapture(0)
+if platform == "linux" or platform == "linux2":
+    cap = cv2.VideoCapture(0)
+elif platform == "win32":
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
 #socket server's IP address & port 
 port = 21000
