@@ -11,7 +11,7 @@ import time
 #face detection classifier
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 #WebCam handler
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+cap = cv2.VideoCapture(0)
 
 #socket server's IP address & port 
 port = 21000
@@ -22,8 +22,8 @@ clients = set()
 clients_lock = threading.Lock()
 
 global serversock
-serversock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# serversock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+serversock = socket.socket()
+serversock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 serversock.bind((host,port))
 serversock.listen(3)
 th = []
@@ -48,12 +48,10 @@ def clientReceivement():
 
     print ("\nWaiting for new clients...\n")
     while True:
-        client, address = serversock.accept()
-        
-        if client is None or address is None:
+        try:
+           (client, address) = serversock.accept()
+        except OSError:
             break
-
-        #client.setblocking(False)
         th.append(Thread(target=listener, args = (client,address)) )
         th[-1].start()
     
@@ -78,6 +76,7 @@ while True:
 cap.release()
 cv2.destroyAllWindows()
 
+serversock.shutdown(socket.SHUT_RDWR)
 serversock.close()
 
 for thd in th:
