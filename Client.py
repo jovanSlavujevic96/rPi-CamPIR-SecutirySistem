@@ -1,5 +1,5 @@
 import cv2
-import io
+# import io
 import socket
 import struct
 import time
@@ -8,8 +8,14 @@ import zlib
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+import argparse
+
+parser = argparse.ArgumentParser(description='set the IP address.')
+parser.add_argument('--IP', type=str, help='set the IP address of the rPi (server device)')
+args = parser.parse_args()
+
 port = 21000
-host = socket.gethostname() # Get local machine name
+host = str(args.IP) #'192.168.0.100' #socket.gethostname() # Get local machine name
 
 client_socket.connect((host, port) )
 connection = client_socket.makefile('wb')

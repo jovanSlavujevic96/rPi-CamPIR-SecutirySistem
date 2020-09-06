@@ -26,6 +26,7 @@ elif platform == "win32":
 cap.set(3, 320)
 cap.set(4, 240)
 
+#arguments parser for IP address enter
 import argparse
 
 parser = argparse.ArgumentParser(description='set the IP address.')
