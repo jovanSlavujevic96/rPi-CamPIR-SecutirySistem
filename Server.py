@@ -26,9 +26,15 @@ elif platform == "win32":
 cap.set(3, 320)
 cap.set(4, 240)
 
+import argparse
+
+parser = argparse.ArgumentParser(description='set the IP address.')
+parser.add_argument('--IP', type=str, help='set the IP address of the rPi (server device)')
+args = parser.parse_args()
+
 #socket server's IP address & port 
 port = 21000
-host = socket.gethostname() # Get local machine name
+host = str(args.IP) #'192.168.0.109' #socket.gethostname() # Get local machine name
 
 #socket initialisation
 clients = set()
@@ -38,6 +44,10 @@ serversock = socket.socket()
 serversock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 serversock.bind((host,port))
 serversock.listen(3)
+
+print("IP: ")
+print(serversock.getsockname() )
+
 th = []
 
 ClientConnection = True
@@ -45,6 +55,7 @@ ClientConnection = True
 def listener(client, address):
     global data
     global sndMsg
+    sndMsg = False
     print ("\nAccepted connection from: ", address,'\n')
     with clients_lock:
         clients.add(client)
@@ -78,7 +89,6 @@ def clientReceivement():
 th.append(Thread(target=clientReceivement) )
 th[-1].start()
 
-
 incr = 0
 limit = 40000
 
@@ -100,11 +110,13 @@ while True:
             roi_gray = gray[y:y+h, x:x+w]
             roi_color = frame[y:y+h, x:x+w]
 
+        # #display image and handle break with escape button
         # cv2.imshow('img', frame)
         # k = cv2.waitKey(30) & 0xff
         # if k == 27:
         #     break
 
+        # #enable only sending frames with frame detection
         # if(len(faces) == 0):
         #     continue
 
