@@ -11,8 +11,70 @@ import time
 #sys lib for checking a platform (OS)
 from sys import platform
 
+#support libraries for image packing
 import struct
 import pickle
+
+#RPi lib for distance measurement usecase
+import RPi.GPIO as GPIO
+import time
+
+def HCSR04_init():
+    #GPIO Mode (BOARD / BCM)
+    GPIO.setmode(GPIO.BCM)
+    
+    #set GPIO Pins
+    GPIO_TRIGGER = 18
+    GPIO_ECHO = 24
+
+    #set GPIO direction (IN / OUT)
+    GPIO.setup(GPIO_TRIGGER, GPIO.OUT)
+    GPIO.setup(GPIO_ECHO, GPIO.IN)
+
+def distance():
+    # set Trigger to HIGH
+    GPIO.output(GPIO_TRIGGER, True)
+ 
+    # set Trigger after 0.01ms to LOW
+    time.sleep(0.00001)
+    GPIO.output(GPIO_TRIGGER, False)
+ 
+    StartTime = time.time()
+    StopTime = time.time()
+ 
+    # save StartTime
+    while GPIO.input(GPIO_ECHO) == 0:
+        StartTime = time.time()
+ 
+    # save time of arrival
+    while GPIO.input(GPIO_ECHO) == 1:
+        StopTime = time.time()
+ 
+    # time difference between start and arrival
+    TimeElapsed = StopTime - StartTime
+    # multiply with the sonic speed (34300 cm/s)
+    # and divide by 2, because there and back
+    distance = (TimeElapsed * 34300) / 2
+ 
+    return distance
+
+def HCSR04_loop():
+    global detected
+    detected = False
+    itterations = 0 #til itterationLimit
+    itterationLimit = 100
+    distanceLimit = 80.0
+    while True:
+        dist = distance()
+        print ("Measured Distance = %.1f cm" % dist)
+        if(dist < distanceLimit):
+            detected = True
+        if(True == detected):
+            itterations += 1
+        if(itterations == itterationLimit):
+            itterations = 0
+            detected = False
+        time.sleep(1)
 
 encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
 
@@ -55,14 +117,14 @@ ClientConnection = True
 
 def listener(client, address):
     global data
-    global sndMsg
+    global detected
     sndMsg = False
     print ("\nAccepted connection from: ", address,'\n')
     with clients_lock:
         clients.add(client)
 
     while ClientConnection:
-        if sndMsg == True:
+        if sndMsg == True and detected == True:
             try:
                 client.sendall(struct.pack(">L", len(data) ) + data)
                 sndMsg = False
@@ -91,12 +153,16 @@ def clientReceivement():
         th[-1].start()
     
 
+HCSR04_init()
+th.append(Thread(target=HCSR04_loop))
+
 th.append(Thread(target=clientReceivement) )
 th[-1].start()
 
 incr = 0
 limit = 40000
 
+global detected
 while True:
     try:        
         incr = incr + 1
@@ -108,12 +174,18 @@ while True:
 
         ret, frame = cap.read()
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-        for(x, y, w, h) in faces:
-            cv2.rectangle(frame, (x,y), (x+w, y+h), (0, 0, 255), 2)
-            roi_gray = gray[y:y+h, x:x+w]
-            roi_color = frame[y:y+h, x:x+w]
+        if detected == True:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+            for(x, y, w, h) in faces:
+                cv2.rectangle(frame, (x,y), (x+w, y+h), (0, 0, 255), 2)
+                roi_gray = gray[y:y+h, x:x+w]
+                roi_color = frame[y:y+h, x:x+w]
+            
+            sndMsg = True
+            result, frame = cv2.imencode('.jpg', frame, encode_param)
+            data = pickle.dumps(frame, 0)
+
 
         # #display image and handle break with escape button
         # cv2.imshow('img', frame)
@@ -124,10 +196,6 @@ while True:
         # #enable only sending frames with frame detection
         # if(len(faces) == 0):
         #     continue
-
-        sndMsg = True
-        result, frame = cv2.imencode('.jpg', frame, encode_param)
-        data = pickle.dumps(frame, 0)
 
     except KeyboardInterrupt:
         break
