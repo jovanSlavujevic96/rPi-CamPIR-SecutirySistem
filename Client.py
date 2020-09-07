@@ -39,7 +39,9 @@ while True:
     frame=pickle.loads(frame_data, fix_imports=True, encoding="bytes")
     frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
     cv2.imshow('ImageWindow',frame)
-    cv2.waitKey(1)
+    k = cv2.waitKey(1) & 0xff
+    if k == 27:
+        break
 
-client.close()
+client_socket.close()
 cv2.destroyAllWindows()

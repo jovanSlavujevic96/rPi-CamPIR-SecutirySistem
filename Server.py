@@ -68,6 +68,10 @@ def listener(client, address):
                 sndMsg = False
             except BrokenPipeError:
                 break
+            except ConnectionResetError:
+                break
+            except ConnectionAbortedError:
+                break
     
     print("\nBroken connection from: ", address, "\n")
     clients.remove(client)
