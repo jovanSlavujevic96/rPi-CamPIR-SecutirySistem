@@ -19,17 +19,16 @@ import pickle
 import RPi.GPIO as GPIO
 import time
 
-def HCSR04_init():
-    #GPIO Mode (BOARD / BCM)
-    GPIO.setmode(GPIO.BCM)
-    
-    #set GPIO Pins
-    GPIO_TRIGGER = 18
-    GPIO_ECHO = 24
+# GPIO Mode (BOARD / BCM)
+GPIO.setmode(GPIO.BCM)
 
-    #set GPIO direction (IN / OUT)
-    GPIO.setup(GPIO_TRIGGER, GPIO.OUT)
-    GPIO.setup(GPIO_ECHO, GPIO.IN)
+#set GPIO Pins
+GPIO_TRIGGER = 18
+GPIO_ECHO = 24
+
+#set GPIO direction (IN / OUT)
+GPIO.setup(GPIO_TRIGGER, GPIO.OUT)
+GPIO.setup(GPIO_ECHO, GPIO.IN)
 
 def distance():
     # set Trigger to HIGH
@@ -58,13 +57,15 @@ def distance():
  
     return distance
 
+DistanceDetection = True
+
 def HCSR04_loop():
     global detected
     detected = False
     itterations = 0 #til itterationLimit
-    itterationLimit = 100
+    itterationLimit = 10
     distanceLimit = 80.0
-    while True:
+    while DistanceDetection:
         dist = distance()
         print ("Measured Distance = %.1f cm" % dist)
         if(dist < distanceLimit):
@@ -74,6 +75,7 @@ def HCSR04_loop():
         if(itterations == itterationLimit):
             itterations = 0
             detected = False
+        print("HCSR04_loop thread :: detected movement = ",str(detected) )
         time.sleep(1)
 
 encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
@@ -113,27 +115,36 @@ print(serversock.getsockname() )
 
 th = []
 
+#initialisation for data packing
+ret, frame = cap.read()
+result, frame = cv2.imencode('.jpg', frame, encode_param)
+data = pickle.dumps(frame, 0)
+
 ClientConnection = True
 
 def listener(client, address):
     global data
     global detected
+    global sndMsg
     sndMsg = False
     print ("\nAccepted connection from: ", address,'\n')
     with clients_lock:
         clients.add(client)
 
+    incr_ = 0
     while ClientConnection:
-        if sndMsg == True and detected == True:
-            try:
-                client.sendall(struct.pack(">L", len(data) ) + data)
-                sndMsg = False
-            except BrokenPipeError:
-                break
-            except ConnectionResetError:
-                break
-            except ConnectionAbortedError:
-                break
+        
+        if detected == True:
+            if(sndMsg == True):
+                try:
+                    client.sendall(struct.pack(">L", len(data) ) + data)
+                    sndMsg = False
+                except BrokenPipeError:
+                    break
+                except ConnectionResetError:
+                    break
+                except ConnectionAbortedError:
+                    break
     
     print("\nBroken connection from: ", address, "\n")
     clients.remove(client)
@@ -153,8 +164,8 @@ def clientReceivement():
         th[-1].start()
     
 
-HCSR04_init()
 th.append(Thread(target=HCSR04_loop))
+th[-1].start()
 
 th.append(Thread(target=clientReceivement) )
 th[-1].start()
@@ -162,7 +173,8 @@ th[-1].start()
 incr = 0
 limit = 40000
 
-global detected
+detected = False
+sndMsg = False
 while True:
     try:        
         incr = incr + 1
@@ -172,7 +184,17 @@ while True:
         elif(incr == limit):
             incr = 0
 
+    except KeyboardInterrupt:
+        break
+
+    try:
         ret, frame = cap.read()
+
+        # #display image and handle break with escape button
+        # cv2.imshow('img', frame)
+        # k = cv2.waitKey(30) & 0xff
+        # if k == 27:
+            # break
 
         if detected == True:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -182,20 +204,13 @@ while True:
                 roi_gray = gray[y:y+h, x:x+w]
                 roi_color = frame[y:y+h, x:x+w]
             
+            # #enable only sending frames with face detection
+            # if(len(faces) == 0):
+            #     continue
+            
             sndMsg = True
             result, frame = cv2.imencode('.jpg', frame, encode_param)
             data = pickle.dumps(frame, 0)
-
-
-        # #display image and handle break with escape button
-        # cv2.imshow('img', frame)
-        # k = cv2.waitKey(30) & 0xff
-        # if k == 27:
-        #     break
-
-        # #enable only sending frames with frame detection
-        # if(len(faces) == 0):
-        #     continue
 
     except KeyboardInterrupt:
         break
@@ -208,13 +223,13 @@ for client in clients:
     client.close()
 
 ClientConnection = False
+DistanceDetection = False
 
 try:
     serversock.shutdown(socket.SHUT_RDWR)
     serversock.close()
 except OSError:
     serversock.close()
-
 
 if(clients_lock.locked() == True):
     clients_lock.release()
