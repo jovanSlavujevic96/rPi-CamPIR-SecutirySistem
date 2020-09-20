@@ -158,6 +158,11 @@ RecordVideo = True
 
 from datetime import datetime
 
+import os
+mypath = 'videos/'
+if not os.path.isdir(mypath):
+   os.makedirs(mypath)
+
 def VideoWriting():
     global frame
     global writeVideo
@@ -170,7 +175,7 @@ def VideoWriting():
 
     while RecordVideo:
         if(True == firstTime and True == detected and True == writeVideo):
-            fileName = 'videos/'+'video_' + str(datetime.now() ) + '.avi'
+            fileName = mypath +'video_' + str(datetime.now() ) + '.avi'
             out = cv2.VideoWriter(fileName, fourcc, 20.0, (int(cap.get(3)), int(cap.get(4)))) 
             firstTime = False
         if(True == writeVideo):
