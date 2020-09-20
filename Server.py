@@ -15,9 +15,9 @@ from sys import platform
 import struct
 import pickle
 
+# '''
 #RPi lib for distance measurement usecase
 import RPi.GPIO as GPIO
-import time
 
 # GPIO Mode (BOARD / BCM)
 GPIO.setmode(GPIO.BCM)
@@ -77,7 +77,7 @@ def HCSR04_loop():
             detected = False
         print("HCSR04_loop thread :: detected movement = ",str(detected) )
         time.sleep(1)
-
+# '''
 encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
 
 #face detection classifier
@@ -131,28 +131,19 @@ def listener(client, address):
     with clients_lock:
         clients.add(client)
 
-    incr_ = 0
     while ClientConnection:
-        
         if detected == True:
             if(sndMsg == True):
                 try:
                     client.sendall(struct.pack(">L", len(data) ) + data)
                     sndMsg = False
-                except BrokenPipeError:
-                    break
-                except ConnectionResetError:
-                    break
-                except ConnectionAbortedError:
+                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                     break
     
     print("\nBroken connection from: ", address, "\n")
     clients.remove(client)
 
 def clientReceivement():
-    global sndMsg
-    sndMsg = False
-
     print ("\nWaiting for new clients...\n")
     while True:
         try:
@@ -162,7 +153,34 @@ def clientReceivement():
 
         th.append(Thread(target=listener, args = (client,address)) )
         th[-1].start()
-    
+
+RecordVideo = True
+
+from datetime import datetime
+
+def VideoWriting():
+    global frame
+    global writeVideo
+    global detected
+    detected = False
+    firstTime = True
+    writeVideo = False
+    out = cv2.VideoWriter()
+    fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
+
+    while RecordVideo:
+        if(True == firstTime and True == detected and True == writeVideo):
+            fileName = 'videos/'+'video_' + str(datetime.now() ) + '.avi'
+            out = cv2.VideoWriter(fileName, fourcc, 20.0, (int(cap.get(3)), int(cap.get(4)))) 
+            firstTime = False
+        if(True == writeVideo):
+            out.write(frame)
+            writeVideo = False
+        if(False == detected):
+            firstTime = True
+            out.release()
+    if(out.isOpened() ):
+        out.release()
 
 th.append(Thread(target=HCSR04_loop))
 th[-1].start()
@@ -170,11 +188,17 @@ th[-1].start()
 th.append(Thread(target=clientReceivement) )
 th[-1].start()
 
+th.append(Thread(target=VideoWriting) )
+th[-1].daemon = True
+th[-1].start()
+
 incr = 0
 limit = 40000
 
 detected = False
 sndMsg = False
+writeVideo = False
+displayFlag = False #set manually
 while True:
     try:        
         incr = incr + 1
@@ -190,11 +214,8 @@ while True:
     try:
         ret, frame = cap.read()
 
-        # #display image and handle break with escape button
-        # cv2.imshow('img', frame)
-        # k = cv2.waitKey(30) & 0xff
-        # if k == 27:
-            # break
+        if(ret == False):
+            break
 
         if detected == True:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -209,8 +230,18 @@ while True:
             #     continue
             
             sndMsg = True
-            result, frame = cv2.imencode('.jpg', frame, encode_param)
-            data = pickle.dumps(frame, 0)
+            writeVideo = True
+            print("Main :: Frame")
+            result, framePacked = cv2.imencode('.jpg', frame, encode_param)
+            data = pickle.dumps(framePacked, 0)
+
+        if(displayFlag == True):
+            cv2.imshow('img', frame)
+            k = cv2.waitKey(30) & 0xff
+            if k == 27:
+                break
+            elif k == ord('s'):
+                detected = not detected
 
     except KeyboardInterrupt:
         break
@@ -224,6 +255,7 @@ for client in clients:
 
 ClientConnection = False
 DistanceDetection = False
+RecordVideo = False
 
 try:
     serversock.shutdown(socket.SHUT_RDWR)

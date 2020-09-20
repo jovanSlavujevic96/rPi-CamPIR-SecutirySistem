@@ -15,7 +15,7 @@ parser.add_argument('--IP', type=str, help='set the IP address of the rPi (serve
 args = parser.parse_args()
 
 port = 21000
-host = str(args.IP) #'192.168.0.100' #socket.gethostname() # Get local machine name
+host = str(args.IP) #'192.168.0.100' #example
 
 client_socket.connect((host, port) )
 connection = client_socket.makefile('wb')
