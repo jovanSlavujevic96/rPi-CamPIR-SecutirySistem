@@ -15,69 +15,72 @@ from sys import platform
 import struct
 import pickle
 
-# '''
 #RPi lib for distance measurement usecase
-import RPi.GPIO as GPIO
-
-# GPIO Mode (BOARD / BCM)
-GPIO.setmode(GPIO.BCM)
-
-#set GPIO Pins
-GPIO_TRIGGER = 18
-GPIO_ECHO = 24
-
-#set GPIO direction (IN / OUT)
-GPIO.setup(GPIO_TRIGGER, GPIO.OUT)
-GPIO.setup(GPIO_ECHO, GPIO.IN)
-
-def distance():
-    # set Trigger to HIGH
-    GPIO.output(GPIO_TRIGGER, True)
- 
-    # set Trigger after 0.01ms to LOW
-    time.sleep(0.00001)
-    GPIO.output(GPIO_TRIGGER, False)
- 
-    StartTime = time.time()
-    StopTime = time.time()
- 
-    # save StartTime
-    while GPIO.input(GPIO_ECHO) == 0:
-        StartTime = time.time()
- 
-    # save time of arrival
-    while GPIO.input(GPIO_ECHO) == 1:
-        StopTime = time.time()
- 
-    # time difference between start and arrival
-    TimeElapsed = StopTime - StartTime
-    # multiply with the sonic speed (34300 cm/s)
-    # and divide by 2, because there and back
-    distance = (TimeElapsed * 34300) / 2
- 
-    return distance
+RPI_used = True
+try:
+    import RPi.GPIO as GPIO
+except ModuleNotFoundError:
+    RPI_used = False
 
 DistanceDetection = True
+if True == RPI_used:
+    # GPIO Mode (BOARD / BCM)
+    GPIO.setmode(GPIO.BCM)
 
-def HCSR04_loop():
-    global detected
-    detected = False
-    itterations = 0 #til itterationLimit
-    itterationLimit = 10
-    distanceLimit = 80.0
-    while DistanceDetection:
-        dist = distance()
-        print ("Measured Distance = %.1f cm" % dist)
-        if(dist < distanceLimit):
-            detected = True
-        if(True == detected):
-            itterations += 1
-        if(itterations == itterationLimit):
-            itterations = 0
-            detected = False
-        print("HCSR04_loop thread :: detected movement = ",str(detected) )
-        time.sleep(1)
-# '''
+    #set GPIO Pins
+    GPIO_TRIGGER = 18
+    GPIO_ECHO = 24
+
+    #set GPIO direction (IN / OUT)
+    GPIO.setup(GPIO_TRIGGER, GPIO.OUT)
+    GPIO.setup(GPIO_ECHO, GPIO.IN)
+
+    def distance():
+        # set Trigger to HIGH
+        GPIO.output(GPIO_TRIGGER, True)
+    
+        # set Trigger after 0.01ms to LOW
+        time.sleep(0.00001)
+        GPIO.output(GPIO_TRIGGER, False)
+    
+        StartTime = time.time()
+        StopTime = time.time()
+    
+        # save StartTime
+        while GPIO.input(GPIO_ECHO) == 0:
+            StartTime = time.time()
+    
+        # save time of arrival
+        while GPIO.input(GPIO_ECHO) == 1:
+            StopTime = time.time()
+    
+        # time difference between start and arrival
+        TimeElapsed = StopTime - StartTime
+        # multiply with the sonic speed (34300 cm/s)
+        # and divide by 2, because there and back
+        distance = (TimeElapsed * 34300) / 2
+    
+        return distance
+
+    def HCSR04_loop():
+        global detected
+        detected = False
+        itterations = 0 #til itterationLimit
+        itterationLimit = 10
+        distanceLimit = 80.0
+        while DistanceDetection:
+            dist = distance()
+            print ("Measured Distance = %.1f cm" % dist)
+            if(dist < distanceLimit):
+                detected = True
+            if(True == detected):
+                itterations += 1
+            if(itterations == itterationLimit):
+                itterations = 0
+                detected = False
+            print("HCSR04_loop thread :: detected movement = ",str(detected) )
+            time.sleep(1)
+    
 encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
 
 #face detection classifier
@@ -93,8 +96,19 @@ cap.set(4, 240)
 #arguments parser for IP address enter
 import argparse
 
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 parser = argparse.ArgumentParser(description='set the IP address.')
-parser.add_argument('--IP', type=str, help='set the IP address of the rPi (server device)')
+parser.add_argument('--IP', type=str, help='set the IP address of the rPi (server device)', default=socket.gethostname() )
+parser.add_argument('--display', type=str2bool, help='set the display flag', nargs='?', const=True, default=False)
 args = parser.parse_args()
 
 #socket server's IP address & port 
@@ -187,8 +201,9 @@ def VideoWriting():
     if(out.isOpened() ):
         out.release()
 
-th.append(Thread(target=HCSR04_loop))
-th[-1].start()
+if True == RPI_used:
+    th.append(Thread(target=HCSR04_loop))
+    th[-1].start()
 
 th.append(Thread(target=clientReceivement) )
 th[-1].start()
@@ -200,10 +215,9 @@ th[-1].start()
 incr = 0
 limit = 40000
 
-detected = False
+detected = not RPI_used
 sndMsg = False
 writeVideo = False
-displayFlag = False #set manually
 while True:
     try:        
         incr = incr + 1
@@ -236,11 +250,10 @@ while True:
             
             sndMsg = True
             writeVideo = True
-            print("Main :: Frame")
             result, framePacked = cv2.imencode('.jpg', frame, encode_param)
             data = pickle.dumps(framePacked, 0)
 
-        if(displayFlag == True):
+        if(bool(args.display) == True):
             cv2.imshow('img', frame)
             k = cv2.waitKey(30) & 0xff
             if k == 27:
