@@ -15,6 +15,27 @@ from sys import platform
 import struct
 import pickle
 
+#arguments parser for IP address enter
+import argparse
+
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+parser = argparse.ArgumentParser(description='set the IP address.')
+parser.add_argument('--IP', type=str, help='set the IP address of the rPi (server device)', default=socket.gethostname() )
+parser.add_argument('--display', type=str2bool, help='set the display flag', nargs='?', const=True, default=False)
+parser.add_argument('--fps', type=float, help='set the fps of rec video', default=10.0)
+parser.add_argument('--streaming', type=int, help='set the streaming limit if hcs04 detected someone', default=10)
+
+args = parser.parse_args()
+
 #RPi lib for distance measurement usecase
 RPI_used = True
 try:
@@ -66,7 +87,7 @@ if True == RPI_used:
         global detected
         detected = False
         itterations = 0 #til itterationLimit
-        itterationLimit = 10
+        itterationLimit = args.streaming
         distanceLimit = 80.0
         while DistanceDetection:
             dist = distance()
@@ -92,24 +113,6 @@ elif platform == "win32":
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 cap.set(3, 320)
 cap.set(4, 240)
-
-#arguments parser for IP address enter
-import argparse
-
-def str2bool(v):
-    if isinstance(v, bool):
-       return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
-
-parser = argparse.ArgumentParser(description='set the IP address.')
-parser.add_argument('--IP', type=str, help='set the IP address of the rPi (server device)', default=socket.gethostname() )
-parser.add_argument('--display', type=str2bool, help='set the display flag', nargs='?', const=True, default=False)
-args = parser.parse_args()
 
 #socket server's IP address & port 
 port = 21000
@@ -190,7 +193,7 @@ def VideoWriting():
     while RecordVideo:
         if(True == firstTime and True == detected and True == writeVideo):
             fileName = mypath +'video_' + str(datetime.now() ) + '.avi'
-            out = cv2.VideoWriter(fileName, fourcc, 20.0, (int(cap.get(3)), int(cap.get(4)))) 
+            out = cv2.VideoWriter(fileName, fourcc, args.fps, (int(cap.get(3)), int(cap.get(4)))) 
             firstTime = False
         if(True == writeVideo):
             out.write(frame)
