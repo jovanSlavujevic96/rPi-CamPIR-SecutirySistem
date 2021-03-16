@@ -126,7 +126,7 @@ clients_lock = threading.Lock()
 
 serversock = socket.socket()
 serversock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-serversock.bind((host,port))
+serversock.bind(('',port))
 serversock.listen()
 
 print("IP: ")
