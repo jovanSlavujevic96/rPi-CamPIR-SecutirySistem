@@ -1,6 +1,6 @@
 import socket
 
-MCAST_GRP = '224.1.1.1'
+MCAST_GRP = "224.0.0.251" #'224.1.1.1'
 MCAST_PORT = 5007
 # regarding socket.IP_MULTICAST_TTL
 # ---------------------------------
