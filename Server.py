@@ -103,12 +103,11 @@ if True == RPI_used:
             print("HCSR04_loop thread :: detected movement = ",str(detected) )
             time.sleep(1)
     
-encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
-
+encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50]
 
 #face detection classifier
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
-
+ 
 #WebCam handler
 if platform == "linux" or platform == "linux2":
     cap = cv2.VideoCapture(0)
@@ -148,13 +147,12 @@ th = []
 
 #initialisation for data packing
 ret, frame = cap.read()
-result, frame = cv2.imencode('.jpg', frame, encode_param)
-data = pickle.dumps(frame, 0)
+result, framePacked = cv2.imencode('.jpg', frame, encode_param)
+
 
 ClientConnection = True
 
 def listener(client, address):
-    global data
     global detected
     # Atribut global govori da je u pitanju globalna promenljiva, te da ne instancira
     # novu lokalnu promenljivu nego njene vrednosti očitava ‘spolja’
@@ -168,7 +166,7 @@ def listener(client, address):
         if detected == True:
             if(sndMsg == True):
                 try:
-                    client.sendall(struct.pack(">L", len(data) ) + data)
+                    client.sendall(framePacked)
                     sndMsg = False
                 except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                     break
@@ -253,7 +251,7 @@ while True:
     try:
         ret, frame = cap.read()
 
-        if(ret == False | frame is None):
+        if(ret == False or frame is None):
             print("Frame doesn't exist")
             break
 
@@ -272,7 +270,6 @@ while True:
             sndMsg = True
             writeVideo = True
             result, framePacked = cv2.imencode('.jpg', frame, encode_param)
-            data = pickle.dumps(framePacked, 0)
 
         if(bool(args.display) == True):
             cv2.imshow('img', frame)
@@ -283,7 +280,7 @@ while True:
                 detected = not detected
 
         if(True == bMulticast and True == sndMsg):
-            serversock.sendto(struct.pack(">L", len(data) ) + data, (MCAST_GRP, MCAST_PORT))
+            serversock.sendto(framePacked, (MCAST_GRP, port))
 
     except KeyboardInterrupt:
         break
@@ -291,10 +288,11 @@ while True:
 cap.release()
 cv2.destroyAllWindows()
 
-for client in clients:
-    client.shutdown(socket.SHUT_RDWR)
-    client.close()
-
+if(False == bMulticast):
+    for client in clients:
+        client.shutdown(socket.SHUT_RDWR)
+        client.close()
+    
 ClientConnection = False
 DistanceDetection = False
 RecordVideo = False
@@ -305,8 +303,9 @@ try:
 except OSError:
     serversock.close()
 
-if(clients_lock.locked() == True):
-    clients_lock.release()
+if(False == bMulticast):
+    if(clients_lock.locked() == True):
+        clients_lock.release()
 
 for thd in th:
     thd.join()

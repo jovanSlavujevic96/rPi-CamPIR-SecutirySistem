@@ -6,39 +6,66 @@ import time
 import pickle
 import zlib
 import argparse
+import numpy as np
+
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 parser = argparse.ArgumentParser(description='set the IP address.')
-parser.add_argument('--IP', 
-    type=str, 
-    help='set the IP address of the rPi (server device)')
+parser.add_argument('--IP', type=str, help='set the IP address of the rPi (server device)')
+parser.add_argument('--mcast', type=str2bool, help='run on multicast mode', nargs='?', const=True, default=False)
+
 args = parser.parse_args()
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 port = 21000
-host = str(args.IP) #'192.168.0.100' #example
 
-client_socket.connect((host, port) )
+bMulticast = args.mcast 
+if(False == bMulticast):
+    host = str(args.IP) 
+else:
+    MCAST_GRP = "224.0.0.251"
+    host = MCAST_GRP
+    IS_ALL_GROUPS = True
 
-data = b""
-payload_size = struct.calcsize(">L")
+if(False == bMulticast):
+    client_socket.connect((host, port) )
+else:
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    if IS_ALL_GROUPS:
+        # on this port, receives ALL multicast groups
+        client_socket.bind(('', port))
+    else:
+        # on this port, listen ONLY to MCAST_GRP
+        client_socket.bind((MCAST_GRP, port))
+    mreq = struct.pack("4sl", socket.inet_aton(MCAST_GRP), socket.INADDR_ANY)
+
+    client_socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+
+client_socket.setblocking(0)
+
+message = b""
 
 while True:
-    while len(data) < payload_size:
-        data += client_socket.recv(4096)
+    try:
+        try:
+            message = client_socket.recv(65535)
+        except BlockingIOError:
+            time.sleep(0.05)
+            continue
+    except KeyboardInterrupt:
+        break
 
-    packed_msg_size = data[:payload_size]
-    data = data[payload_size:]
-    msg_size = struct.unpack(">L", packed_msg_size)[0]
-
-    while len(data) < msg_size:
-        data += client_socket.recv(4096)
-        
-    frame_data = data[:msg_size]
-    data = data[msg_size:]
-
-    frame=pickle.loads(frame_data, fix_imports=True, encoding="bytes")
-    frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
+    frame=cv2.imdecode(np.ndarray(shape=(1, len(message)), dtype=np.uint8, buffer=message),cv2.IMREAD_COLOR)
     cv2.imshow('ImageWindow',frame)
     k = cv2.waitKey(1) & 0xff
     if k == 27:
