@@ -33,6 +33,7 @@ parser.add_argument('--IP', type=str, help='set the IP address of the rPi (serve
 parser.add_argument('--display', type=str2bool, help='set the display flag', nargs='?', const=True, default=False)
 parser.add_argument('--fps', type=float, help='set the fps of rec video', default=10.0)
 parser.add_argument('--streaming', type=int, help='set the streaming limit if hcsr04 detected someone', default=10)
+parser.add_argument('--mcast', type=str2bool, help='run on multicast mode', nargs='?', const=True, default=False)
 
 args = parser.parse_args()
 
@@ -118,16 +119,27 @@ cap.set(4, 240)
 
 #socket server's IP address & port 
 port = 21000
-host = str(args.IP) #'192.168.0.109' #socket.gethostname() # Get local machine name
 
-#socket initialisation
-clients = set()
-clients_lock = threading.Lock()
+bMulticast = args.mcast 
+if(False == bMulticast):
+    host = str(args.IP) #'192.168.0.109' #socket.gethostname() # Get local machine name
+else:
+    MCAST_GRP = "224.0.0.251"
+    host = MCAST_GRP
+    MULTICAST_TTL = 2
 
-serversock = socket.socket()
-serversock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-serversock.bind(('',port))
-serversock.listen()
+if(False == bMulticast):
+    #socket initialisation
+    clients = set()
+    clients_lock = threading.Lock()
+
+    serversock = socket.socket()
+    serversock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    serversock.bind(('',port))
+    serversock.listen()
+else:
+    serversock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    serversock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, MULTICAST_TTL)
 
 print("IP: ")
 print(serversock.getsockname() )
@@ -212,8 +224,9 @@ if True == RPI_used:
     th.append(Thread(target=HCSR04_loop))
     th[-1].start()
 
-th.append(Thread(target=clientReceivement) )
-th[-1].start()
+if(False == bMulticast):
+    th.append(Thread(target=clientReceivement) )
+    th[-1].start()
 
 th.append(Thread(target=VideoWriting) )
 th[-1].daemon = True
@@ -240,7 +253,8 @@ while True:
     try:
         ret, frame = cap.read()
 
-        if(ret == False):
+        if(ret == False | frame is None):
+            print("Frame doesn't exist")
             break
 
         if detected == True:
@@ -267,6 +281,9 @@ while True:
                 break
             elif k == ord('s'):
                 detected = not detected
+
+        if(True == bMulticast and True == sndMsg):
+            serversock.sendto(struct.pack(">L", len(data) ) + data, (MCAST_GRP, MCAST_PORT))
 
     except KeyboardInterrupt:
         break
