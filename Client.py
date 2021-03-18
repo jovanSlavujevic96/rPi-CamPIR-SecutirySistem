@@ -24,8 +24,6 @@ parser.add_argument('--mcast', type=str2bool, help='run on multicast mode', narg
 
 args = parser.parse_args()
 
-client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
 port = 21000
 
 bMulticast = args.mcast 
@@ -37,6 +35,7 @@ else:
     IS_ALL_GROUPS = True
 
 if(False == bMulticast):
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((host, port) )
 else:
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -55,12 +54,14 @@ client_socket.setblocking(0)
 
 message = b""
 
+MAX_PAYLOAD = 65535 #this is MAX possible payload for TCP or UDP packets
+
 while True:
     try:
         try:
-            message = client_socket.recv(65535)
+            message = client_socket.recv(MAX_PAYLOAD)
         except BlockingIOError:
-            time.sleep(0.05)
+            time.sleep(0.05)    # 50 milisec delay
             continue
     except KeyboardInterrupt:
         break

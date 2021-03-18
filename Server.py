@@ -38,14 +38,14 @@ parser.add_argument('--mcast', type=str2bool, help='run on multicast mode', narg
 args = parser.parse_args()
 
 #RPi lib for distance measurement usecase
-RPI_used = True
+bRpiUsed = True
 try:
     import RPi.GPIO as GPIO
 except ModuleNotFoundError:
-    RPI_used = False
+    bRpiUsed = False
 
-DistanceDetection = True
-if True == RPI_used:
+bDistanceDetection = True
+if True == bRpiUsed:
     # GPIO Mode (BOARD / BCM)
     GPIO.setmode(GPIO.BCM)
 
@@ -57,6 +57,9 @@ if True == RPI_used:
     GPIO.setup(GPIO_TRIGGER, GPIO.OUT)
     GPIO.setup(GPIO_ECHO, GPIO.IN)
 
+    StartTime = time.time()
+    StopTime = time.time()
+
     def distance():
         # set Trigger to HIGH
         GPIO.output(GPIO_TRIGGER, True)
@@ -64,9 +67,6 @@ if True == RPI_used:
         # set Trigger after 0.01ms to LOW
         time.sleep(0.00001)
         GPIO.output(GPIO_TRIGGER, False)
-    
-        StartTime = time.time()
-        StopTime = time.time()
     
         # save StartTime
         while GPIO.input(GPIO_ECHO) == 0:
@@ -85,43 +85,31 @@ if True == RPI_used:
         return distance
 
     def HCSR04_loop():
-        global detected
-        detected = False
+        global bDetected
+        bDetected = False
         itterations = 0 #til itterationLimit
         itterationLimit = args.streaming
         distanceLimit = 80.0
-        while DistanceDetection:
+        while bDistanceDetection:
             dist = distance()
             print ("Measured Distance = %.1f cm" % dist)
             if(dist < distanceLimit):
-                detected = True
-            if(True == detected):
+                bDetected = True
+            if(True == bDetected):
                 itterations += 1
             if(itterations == itterationLimit):
                 itterations = 0
-                detected = False
-            print("HCSR04_loop thread :: detected movement = ",str(detected) )
+                bDetected = False
+            print("HCSR04_loop thread :: detected movement = ",str(bDetected) )
             time.sleep(1)
-    
-encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50]
-
-#face detection classifier
-face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
- 
-#WebCam handler
-if platform == "linux" or platform == "linux2":
-    cap = cv2.VideoCapture(0)
-elif platform == "win32":
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-cap.set(3, 320)
-cap.set(4, 240)
+        GPIO.cleanup()
 
 #socket server's IP address & port 
 port = 21000
 
 bMulticast = args.mcast 
 if(False == bMulticast):
-    host = str(args.IP) #'192.168.0.109' #socket.gethostname() # Get local machine name
+    host = str(args.IP)
 else:
     MCAST_GRP = "224.0.0.251"
     host = MCAST_GRP
@@ -146,38 +134,52 @@ if platform != "win32":
 
 th = []
 
+#encode (jpeg compression) quality
+encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50]
+
+#face detection classifier
+face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+ 
+#WebCam handler
+if platform == "linux" or platform == "linux2":
+    cap = cv2.VideoCapture(0)
+elif platform == "win32":
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+cap.set(3, 320)
+cap.set(4, 240)
+
 #initialisation for data packing
 ret, frame = cap.read()
 result, framePacked = cv2.imencode('.jpg', frame, encode_param)
 
-
-ClientConnection = True
+bClientConnection = True
 
 def listener(client, address):
-    global detected
+    global bDetected
     # Atribut global govori da je u pitanju globalna promenljiva, te da ne instancira
     # novu lokalnu promenljivu nego njene vrednosti očitava ‘spolja’
-    global sndMsg
-    sndMsg = False
+    global bSndMsg
+    bSndMsg = False
     print ("\nAccepted connection from: ", address,'\n')
     with clients_lock:
         clients.add(client)
 
-    while ClientConnection:
-        if detected == True:
-            if(sndMsg == True):
+    while bClientConnection:
+        if bDetected == True:
+            if(bSndMsg == True):
                 try:
                     client.sendall(framePacked)
-                    sndMsg = False
+                    bSndMsg = False
                 except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                     break
     
     print("\nBroken connection from: ", address, "\n")
+    client.close()
     clients.remove(client)
 
 def clientReceivement():
     print ("\nWaiting for new clients...\n")
-    while True:
+    while bClientConnection:
         try:
            (client, address) = serversock.accept()
         except OSError:
@@ -186,7 +188,7 @@ def clientReceivement():
         th.append(Thread(target=listener, args = (client,address)) )
         th[-1].start()
 
-RecordVideo = True
+bRecordVideo = True
 
 from datetime import datetime
 import os
@@ -196,25 +198,25 @@ if not os.path.isdir(mypath):
 
 def VideoWriting():
     global frame
-    global writeVideo
-    global detected
-    detected = False
-    firstTime = True
-    writeVideo = False
+    global bWriteVideo
+    global bDetected
+    bDetected = False
+    bFirstTime = True
+    bWriteVideo = False
     out = cv2.VideoWriter()
     fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
 
-    while RecordVideo:
-        if(True == firstTime and True == detected and True == writeVideo):
-            date_time = datetime.now().strftime("%Y_%m_%d_%H.%M.%S")
+    while bRecordVideo:
+        if(True == bFirstTime and True == detected and True == bWriteVideo):
+            date_time = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
             fileName = mypath + 'video_' + date_time + '.avi'
             out = cv2.VideoWriter(fileName, fourcc, args.fps, (int(cap.get(3)), int(cap.get(4)))) 
-            firstTime = False
-        if(True == writeVideo):
+            bFirstTime = False
+        if(True == bWriteVideo):
             out.write(frame)
-            writeVideo = False
-        if(False == detected):
-            firstTime = True
+            bWriteVideo = False
+        if(False == bDetected):
+            bFirstTime = True
             out.release()
     if(out.isOpened() ):
         out.release()
@@ -231,9 +233,9 @@ th.append(Thread(target=VideoWriting) )
 th[-1].daemon = True
 th[-1].start()
 
-detected = not RPI_used
-sndMsg = False
-writeVideo = False
+bDetected = not bRpiUsed
+bSndMsg = False
+bWriteVideo = False
 while True:
     try:
         ret, frame = cap.read()
@@ -242,7 +244,7 @@ while True:
             print("Frame doesn't exist")
             break
 
-        if detected == True:
+        if bDetected == True:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, 
                 scaleFactor=1.3, 
@@ -254,8 +256,8 @@ while True:
             # if(len(faces) == 0):
             #     continue
             
-            sndMsg = True
-            writeVideo = True
+            bSndMsg = True
+            bWriteVideo = True
             result, framePacked = cv2.imencode('.jpg', frame, encode_param)
 
         if(bool(args.display) == True):
@@ -263,10 +265,10 @@ while True:
             k = cv2.waitKey(30) & 0xff
             if k == 27:
                 break
-            elif k == ord('s'):
-                detected = not detected
+            elif k == ord('s'):     # simulate detection of HCSR04 sensor
+                bDetected = not bDetected
 
-        if(True == bMulticast and True == sndMsg):
+        if(True == bMulticast and True == bSndMsg):
             serversock.sendto(framePacked, (MCAST_GRP, port))
 
     except KeyboardInterrupt:
@@ -280,9 +282,9 @@ if(False == bMulticast):
         client.shutdown(socket.SHUT_RDWR)
         client.close()
     
-ClientConnection = False
-DistanceDetection = False
-RecordVideo = False
+bClientConnection = False
+bDistanceDetection = False
+bRecordVideo = False
 
 try:
     serversock.shutdown(socket.SHUT_RDWR)

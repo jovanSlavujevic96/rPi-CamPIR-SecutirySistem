@@ -12,71 +12,56 @@ from threading import Thread
 import threading
 import time
 
-# (grabbed, frame) = cap.read()
-# fshape = frame.shape
-# fheight = fshape[0]
-# fwidth = fshape[1]
-# print (fwidth , fheight)
-# fourcc = cv2.VideoWriter_fourcc(*'XVID')
-# out = cv2.VideoWriter('output.avi',fourcc, 20.0, (fwidth,fheight))
-
-recordVideo = True
-detected = True
+bRecordVideo = True
+bDetected = True
 
 from datetime import datetime
 
 def VideoWriting():
     global frame
-    global writeVideo
-    firstTime = True
-    writeVideo = False
+    global bWriteVideo
+    bFirstTime = True
+    bWriteVideo = False
     out = cv2.VideoWriter()
     fourcc = cv2.VideoWriter_fourcc('M','J','P','G') #cv2.VideoWriter_fourcc(*'XVID')
 
-    while recordVideo:
-        if(True == firstTime and True == detected and True == writeVideo):
-            print("init")
-            print(frame.shape[0], frame.shape[1])
-            fileName = str(datetime.now() ) + '.avi'
+    while bRecordVideo:
+        if(True == bFirstTime and True == bDetected and True == bWriteVideo):
+            fileName = datetime.now().strftime("%Y_%m_%d-%H_%M_%S") + '.avi'
             out = cv2.VideoWriter(fileName, fourcc, 20.0, (int(cap.get(3)), int(cap.get(4)))) 
             #cv2.VideoWriter('output.avi',fourcc, 20.0, (frame.shape[0],frame.shape[1]) )
             print(out.getBackendName())
-            firstTime = False
-        if(True == writeVideo):
+            bFirstTime = False
+        if(True == bWriteVideo):
             out.write(frame)
-            print("VideoWriting :: Frame")
-            writeVideo = False
-        if(False == detected):
-            firstTime = True
+            bWriteVideo = False
+        if(False == bDetected):
+            bFirstTime = True
             out.release()
     
-    print("Out")
     if(out.isOpened() ):
-        print("Released")
         out.release()
 
-th = []
+recordingVideoThread = Thread(target=VideoWriting)
 
-th.append(Thread(target=VideoWriting) )
-th[-1].daemon = True
-th[-1].start()
+recordingVideoThread.daemon = True
+recordingVideoThread.start()
 
+ret = False
 while(cap.isOpened()):
-    ret, frame = cap.read()
+    try:
+        ret, frame = cap.read()
+    except KeyboardInterrupt:
+        break
+
     if ret==True:
-        # frame = cv2.flip(frame,0)
-
-        # write the flipped frame
-        # out.write(frame)
-
-        writeVideo = True
-        print("Main :: Frame")
+        bWriteVideo = True
         cv2.imshow('frame',frame)
         key = cv2.waitKey(1) 
         if key & 0xFF == ord('q'):
             break
         elif key & 0xFF == ord('s'):
-            detected = not detected
+            bDetected = not bDetected
     else:
         break
 
@@ -84,7 +69,6 @@ while(cap.isOpened()):
 cap.release()
 cv2.destroyAllWindows()
 
-recordVideo = False
+bRecordVideo = False
 
-for thd in th:
-    thd.join()
+recordingVideoThread.join()
