@@ -128,21 +128,51 @@ else:
     serversock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     serversock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, MULTICAST_TTL)
 
-if platform != "win32":
-    print("IP: ")
-    print(serversock.getsockname() )
-
+#init thread list
 th = []
+
+import os
+
+def atoi(str):
+    resultant = 0
+    for i in range(len(str)):
+        resultant = resultant * 10 + (ord(str[i]) - ord('0'))        #It is ASCII substraction 
+    return resultant
+
+def getCamList():
+    if platform != "linux" and platform != "linux2":
+        return None
+    output_list  = os.popen('ls /dev/*').readlines()
+    if(output_list == None):
+        return None
+    index_list = None
+    for string in output_list:
+        stringPos = string.find('video') 
+        if(stringPos == -1):
+            continue
+        videoString = string[stringPos:]
+        strlen = len(videoString) - 1 #minus '\n'
+        if(index_list is None):
+            index_list = []
+        index_list.append(atoi(videoString[strlen - 1]))
+    return index_list
+
+indexList = getCamList()
+if((indexList is None) and (platform != "win32")):
+    print("There are not any camera attached to machine. Exiting app")
+    exit()
+elif((indexList is not None) and (platform != "win32")):
+    camIndex = indexList[0]
 
 #encode (jpeg compression) quality
 encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50]
 
 #face detection classifier
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
- 
+
 #WebCam handler
 if platform == "linux" or platform == "linux2":
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(camIndex)
 elif platform == "win32":
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 cap.set(3, 320)
@@ -239,40 +269,42 @@ bWriteVideo = False
 while True:
     try:
         ret, frame = cap.read()
+    except KeyboardInterrupt:
+        break
 
-        if(False == ret or frame is None):
-            print("Frame doesn't exist")
-            break
+    if(False == ret or frame is None):
+        print("Frame doesn't exist")
+        break
 
-        if True == bDetected:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    if True == bDetected:
+        try:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)        
             faces = face_cascade.detectMultiScale(gray, 
                 scaleFactor=1.3, 
                 minNeighbors=5)
             for(x, y, w, h) in faces:
                 cv2.rectangle(frame, (x,y), (x+w, y+h), (0, 0, 255), 2)
-            
-            # #enable only sending frames with face detection
-            # if(len(faces) == 0):
-            #     continue
-            
-            bSndMsg = True
-            bWriteVideo = True
-            result, framePacked = cv2.imencode('.jpg', frame, encode_param)
+        except KeyboardInterrupt:
+            break
 
-        if(bool(args.display) == True):
-            cv2.imshow('img', frame)
-            k = cv2.waitKey(30) & 0xff
-            if k == 27:
-                break
-            elif k == ord('s'):     # simulate detection of HCSR04 sensor
-                bDetected = not bDetected
+        # #enable only sending frames with face detection
+        # if(len(faces) == 0):
+        #     continue
+        
+        bSndMsg = True
+        bWriteVideo = True
+        result, framePacked = cv2.imencode('.jpg', frame, encode_param)
 
-        if(True == bMulticast and True == bSndMsg):
-            serversock.sendto(framePacked, (MCAST_GRP, port))
+    if(bool(args.display) == True):
+        cv2.imshow('img', frame)
+        k = cv2.waitKey(30) & 0xff
+        if k == 27:
+            break
+        elif k == ord('s'):     # simulate detection of HCSR04 sensor
+            bDetected = not bDetected
 
-    except KeyboardInterrupt:
-        break
+    if(True == bMulticast and True == bSndMsg):
+        serversock.sendto(framePacked, (MCAST_GRP, port))
 
 cap.release()
 cv2.destroyAllWindows()
