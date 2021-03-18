@@ -140,8 +140,9 @@ else:
     serversock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     serversock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, MULTICAST_TTL)
 
-print("IP: ")
-print(serversock.getsockname() )
+if platform != "win32":
+    print("IP: ")
+    print(serversock.getsockname() )
 
 th = []
 
@@ -188,7 +189,6 @@ def clientReceivement():
 RecordVideo = True
 
 from datetime import datetime
-
 import os
 mypath = 'videos/'
 if not os.path.isdir(mypath):
@@ -206,7 +206,8 @@ def VideoWriting():
 
     while RecordVideo:
         if(True == firstTime and True == detected and True == writeVideo):
-            fileName = mypath +'video_' + str(datetime.now() ) + '.avi'
+            date_time = datetime.now().strftime("%Y_%m_%d_%H.%M.%S")
+            fileName = mypath + 'video_' + date_time + '.avi'
             out = cv2.VideoWriter(fileName, fourcc, args.fps, (int(cap.get(3)), int(cap.get(4)))) 
             firstTime = False
         if(True == writeVideo):
@@ -230,24 +231,10 @@ th.append(Thread(target=VideoWriting) )
 th[-1].daemon = True
 th[-1].start()
 
-incr = 0
-limit = 40000
-
 detected = not RPI_used
 sndMsg = False
 writeVideo = False
 while True:
-    try:        
-        incr = incr + 1
-
-        if(incr < limit):
-            continue
-        elif(incr == limit):
-            incr = 0
-
-    except KeyboardInterrupt:
-        break
-
     try:
         ret, frame = cap.read()
 
