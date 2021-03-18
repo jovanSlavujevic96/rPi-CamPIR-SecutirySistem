@@ -207,7 +207,7 @@ def VideoWriting():
     fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
 
     while bRecordVideo:
-        if(True == bFirstTime and True == detected and True == bWriteVideo):
+        if(True == bFirstTime and True == bDetected and True == bWriteVideo):
             date_time = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
             fileName = mypath + 'video_' + date_time + '.avi'
             out = cv2.VideoWriter(fileName, fourcc, args.fps, (int(cap.get(3)), int(cap.get(4)))) 
@@ -221,7 +221,7 @@ def VideoWriting():
     if(out.isOpened() ):
         out.release()
 
-if True == RPI_used:
+if True == bRpiUsed:
     th.append(Thread(target=HCSR04_loop))
     th[-1].start()
 
@@ -240,11 +240,11 @@ while True:
     try:
         ret, frame = cap.read()
 
-        if(ret == False or frame is None):
+        if(False == ret or frame is None):
             print("Frame doesn't exist")
             break
 
-        if bDetected == True:
+        if True == bDetected:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, 
                 scaleFactor=1.3, 
