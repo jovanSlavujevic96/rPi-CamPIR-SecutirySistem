@@ -18,6 +18,37 @@ import pickle
 #arguments parser for IP address enter
 import argparse
 
+#wolkabout iot cloud service
+try:
+    import wolk
+    device_name = "RaspberryPi_Kaca"
+    device_key = "pmrnavhc53n3gcby"
+    device_password = "750e663f-8b2f-4016-9d36-230ec02817d3"
+    device = wolk.Device(key=device_key, password=device_password)
+
+    wolk_device = wolk.WolkConnect( device=device, 
+#protocol=wolk.Protocol.JSON_SINGLE, 
+host="iot-elektronika.ftn.uns.ac.rs", 
+port=1883)
+    wolk_device.connect()
+    print("#1 Wolk Connection successful.")
+
+except ModuleNotFoundError as e:
+    print(e)
+    sys.exit(-1)
+
+except RuntimeError as e:
+	print("#1 Wolk Connection unsuccessful.")
+	print(str(e))
+	sys.exit(-1)
+
+def to_Cloud(info1, info2):
+    wolk_device.add_sensor_reading("Temp", info1)
+    wolk_device.add_sensor_reading("Dist", info2)
+    wolk_device.publish()
+    print('Publishing \n\t"Temp": ' + str(info1) + '\n\t"Dist": ' + str(info2) )
+     
+
 def str2bool(v):
     if isinstance(v, bool):
        return v
@@ -41,6 +72,7 @@ args = parser.parse_args()
 bRpiUsed = True
 try:
     import RPi.GPIO as GPIO
+    from w1thermsensor import W1ThermSensor
 except ModuleNotFoundError:
     bRpiUsed = False
 
@@ -56,6 +88,8 @@ if True == bRpiUsed:
     #set GPIO direction (IN / OUT)
     GPIO.setup(GPIO_TRIGGER, GPIO.OUT)
     GPIO.setup(GPIO_ECHO, GPIO.IN)
+
+    temp_sensor = W1ThermSensor()
 
     StartTime = time.time()
     StopTime = time.time()
@@ -84,15 +118,19 @@ if True == bRpiUsed:
     
         return distance
 
-    def HCSR04_loop():
+    def sensors_reading_loop():
         global bDetected
         bDetected = False
         itterations = 0 #til itterationLimit
         itterationLimit = args.streaming
         distanceLimit = 80.0
         while bDistanceDetection:
+            temperature = temp_sensor.get_temperature()
             dist = distance()
+
+            print ("The temperature is %s celsius" % temperature)
             print ("Measured Distance = %.1f cm" % dist)
+            
             if(dist < distanceLimit):
                 bDetected = True
             if(True == bDetected):
@@ -100,7 +138,9 @@ if True == bRpiUsed:
             if(itterations == itterationLimit):
                 itterations = 0
                 bDetected = False
-            print("HCSR04_loop thread :: detected movement = ",str(bDetected) )
+            print("sensors_reading_loop thread :: detected movement = ",str(bDetected) )
+
+            to_Cloud(temperature, dist)
             time.sleep(1)
         GPIO.cleanup()
 
@@ -252,7 +292,7 @@ def VideoWriting():
         out.release()
 
 if True == bRpiUsed:
-    th.append(Thread(target=HCSR04_loop))
+    th.append(Thread(target=sensors_reading_loop))
     th[-1].start()
 
 if(False == bMulticast):
